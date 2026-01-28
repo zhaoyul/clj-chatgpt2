@@ -1,0 +1,14 @@
+{:deps {org.clojure/clojure {:mvn/version "1.12.0"}
+        ;; DJL 核心组件
+        ai.djl/api {:mvn/version "0.29.0"}
+        ai.djl.onnxruntime/onnxruntime-engine {:mvn/version "0.29.0"}
+        ;; 分词器
+        com.knuddels/jtokkit {:mvn/version "1.1.0"}
+        ;; JTokkit 依赖的 fastutil
+        it.unimi.dsi/fastutil {:mvn/version "8.5.12"}
+        ;; Web 服务栈
+        metosin/reitit {:mvn/version "0.7.0-alpha7"}
+        ring/ring-jetty-adapter {:mvn/version "1.12.1"}
+        org.clojure/data.json {:mvn/version "2.5.0"}}
+ :aliases {:dev {:extra-paths ["test"]}
+           :run {:main-opts ["-m" "gpt2.server"]}}}

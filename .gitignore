@@ -1,0 +1,34 @@
+# Clojure
+.cpcache/
+.nrepl-port
+*.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# 模型文件（大文件，不应提交到 Git）
+resources/onnx/*.onnx
+resources/onnx/*.bin
+resources/onnx/*.json
+resources/onnx/*.txt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+*.egg
+
+# 日志
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+/.clj-kondo/
+/.lsp/
