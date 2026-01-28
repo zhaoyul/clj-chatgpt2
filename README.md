@@ -9,6 +9,7 @@
 ## 目录
 
 - [快速开始](#快速开始)
+- [Clerk 可视化分析](#clerk-可视化分析)
 - [1. 项目概述](#1-项目概述)
 - [2. 技术架构](#2-技术架构)
 - [3. 项目结构](#3-项目结构)
@@ -68,6 +69,54 @@ curl -X POST http://localhost:3000/api/generate \
 
 ---
 
+## Clerk 可视化分析
+
+项目包含基于 **Clerk** 的交互式 Notebook，用于可视化展示 GPT-2 模型的内部结构：
+
+### 启动 Notebook 服务器
+
+```bash
+./scripts/clerk.sh
+# 或
+clojure -M:clerk
+```
+
+### Notebook 列表
+
+| Notebook | 内容 | URL |
+|----------|------|-----|
+| **🏠 首页** | Notebook 索引和导航 | http://localhost:7777 |
+| **🏗️ 模型架构** | 整体架构、参数分布、ONNX 结构 | http://localhost:7777/notebooks/model_architecture |
+| **🎯 注意力机制** | 自注意力、多头注意力、因果掩码 | http://localhost:7777/notebooks/attention_mechanism |
+| **🔬 神经网络层** | 权重矩阵、激活函数、信息流动 | http://localhost:7777/notebooks/layer_visualization |
+
+### 可视化示例
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    GPT-2 Architecture                        │
+├─────────────────────────────────────────────────────────────┤
+│  Input Tokens (batch_size × seq_len)                        │
+│                      ↓                                      │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ Token Embeddings (50257 × 768)                     │   │
+│  │ Position Embeddings (1024 × 768)                   │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                      ↓                                      │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │         Transformer Block × 12                      │   │
+│  │  ┌─────────────────────────────────────────────┐   │   │
+│  │  │ LayerNorm + Multi-Head Attention + Residual │   │   │
+│  │  │ LayerNorm + Feed Forward (MLP) + Residual   │   │   │
+│  │  └─────────────────────────────────────────────┘   │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                      ↓                                      │
+│  Output Logits (batch_size × seq_len × 50257)             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## 1. 项目概述
 
 本项目基于 Clojure 构建 GPT-2 推理引擎，采用 DJL (Deep Java Library) + ONNX Runtime 的技术栈。该方案平衡了开发效率与运行性能，利用 Clojure 的函数式编程特性处理复杂的解码逻辑，同时借助 ONNX Runtime 获得接近原生 C++ 的推理性能。
@@ -115,12 +164,18 @@ clj-chatgpt2/
 ├── .gitignore                  # Git 忽略配置
 ├── scripts/
 │   ├── export_model.py         # Python 模型导出脚本
-│   └── run.sh                  # 服务启动脚本
+│   ├── run.sh                  # 服务启动脚本
+│   └── clerk.sh                # Clerk notebook 启动脚本
+├── notebooks/
+│   ├── index.clj               # Notebook 首页
+│   ├── model_architecture.clj  # 模型架构分析
+│   ├── attention_mechanism.clj # 注意力机制解析
+│   └── layer_visualization.clj # 神经网络分层
 ├── src/gpt2/
-│   ├── token.clj               # JTokkit 分词器封装 (67 行)
-│   ├── model.clj               # DJL 模型加载与推理 (100 行)
-│   ├── generate.clj            # 贪婪/Top-K 解码算法 (158 行)
-│   └── server.clj              # Ring/Reitit Web API (178 行)
+│   ├── token.clj               # JTokkit 分词器封装
+│   ├── model.clj               # DJL 模型加载与推理
+│   ├── generate.clj            # 贪婪/Top-K 解码算法
+│   └── server.clj              # Ring/Reitit Web API
 ├── test/gpt2/
 │   ├── token_test.clj          # 分词器测试
 │   └── generate_test.clj       # 生成算法测试
