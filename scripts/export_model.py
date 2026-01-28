@@ -12,6 +12,9 @@ import os
 import sys
 from pathlib import Path
 
+# 提前导入 torch（GPT2Wrapper 类需要）
+import torch
+
 def check_dependencies():
     """检查必要的依赖是否已安装"""
     try:
@@ -24,10 +27,22 @@ def check_dependencies():
         print("[INFO] 请安装依赖: pip install transformers torch")
         sys.exit(1)
 
+class GPT2Wrapper(torch.nn.Module):
+    """包装器类，用于导出 ONNX"""
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+    
+    def forward(self, input_ids, attention_mask):
+        # 使用输出 attentions=False 避免导出额外输出
+        outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, 
+                            return_dict=True, output_attentions=False, output_hidden_states=False)
+        return outputs.logits
+
+
 def export_onnx(model_name: str, output_dir: str):
     """导出 ONNX 模型"""
     from transformers import GPT2LMHeadModel, GPT2Tokenizer
-    import torch
     
     print(f"[INFO] 正在加载模型: {model_name}")
     
@@ -35,7 +50,9 @@ def export_onnx(model_name: str, output_dir: str):
     model = GPT2LMHeadModel.from_pretrained(model_name)
     tokenizer = GPT2Tokenizer.from_pretrained(model_name)
     
-    model.eval()
+    # 包装模型
+    wrapped_model = GPT2Wrapper(model)
+    wrapped_model.eval()
     
     # 创建输出目录
     output_path = Path(output_dir)
@@ -61,11 +78,11 @@ def export_onnx(model_name: str, output_dir: str):
     dynamic_axes = {
         "input_ids": {0: "batch_size", 1: "sequence_length"},
         "attention_mask": {0: "batch_size", 1: "sequence_length"},
-        "logits": {0: "batch_size", 1: "sequence_length"}
+        "logits": {0: "batch_size", 1: "sequence_length", 2: "vocab_size"}
     }
     
     torch.onnx.export(
-        model,
+        wrapped_model,
         (input_ids, attention_mask),
         str(onnx_path),
         input_names=input_names,

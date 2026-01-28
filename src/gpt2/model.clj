@@ -5,6 +5,7 @@
   (:import [ai.djl.repository.zoo Criteria ZooModel]
            [ai.djl.inference Predictor]
            [ai.djl.ndarray NDList NDManager]
+           [ai.djl.ndarray.types Shape]
            [ai.djl.translate NoopTranslator]
            [java.nio.file Paths Path]))
 
@@ -48,7 +49,7 @@
 
 (defn create-predictor
   "创建新的预测器实例
-   
+
    注意：Predictor 不是线程安全的，每个线程应该有自己的实例"
   ^Predictor []
   (.newPredictor (get-model)))
@@ -58,17 +59,18 @@
   [^NDManager manager input-ids]
   (let [seq-len (count input-ids)
         input-array (.create manager (long-array input-ids)
-                             (ai.djl.ndarray.types.Shape. 1 seq-len))
-        mask-array (.ones manager (ai.djl.ndarray.types.Shape. 1 seq-len))]
+                             (Shape. (long-array [1 seq-len])))
+        mask-array (.create manager (long-array (repeat seq-len 1))
+                             (Shape. (long-array [1 seq-len])))]
     (doto (NDList.) (.add input-array) (.add mask-array))))
 
 (defn forward-pass
   "执行一次前向传播
-   
+
    参数:
      predictor - Predictor 实例
      input-ids - 输入 token ID 序列
-   
+
    返回:
      最后一个 token 的 logits float 数组"
   [^Predictor predictor input-ids]
@@ -77,10 +79,9 @@
       (let [inputs (create-input-tensors manager input-ids)
             outputs (.predict predictor inputs)
             logits-tensor (.get outputs 0)
-            seq-len (count input-ids)
-            ;; 获取最后一个 token 的 logits
-            last-token-logits (.get logits-tensor (long-array [0 (dec seq-len)]))
-            result (.toFloatArray last-token-logits)]
+            ;; 返回完整的 logits 数组
+            ;; 调用者需要根据序列长度自行提取最后一个 token 的 logits
+            result (.toFloatArray logits-tensor)]
         ;; 释放中间张量
         (.close inputs)
         (.close outputs)

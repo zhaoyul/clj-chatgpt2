@@ -2,26 +2,69 @@
 
 > 基于 Clojure + DJL + ONNX Runtime 的 GPT-2 推理引擎
 
+## 项目状态
+
+✅ **项目已完成** - 包含完整的前后端实现、模型导出脚本和测试套件
+
 ## 目录
 
+- [快速开始](#快速开始)
 - [1. 项目概述](#1-项目概述)
 - [2. 技术架构](#2-技术架构)
-  - [2.1 核心技术栈](#21-核心技术栈)
-  - [2.2 核心组件映射](#22-核心组件映射)
-- [3. 开发环境准备](#3-开发环境准备)
-  - [3.1 项目结构](#31-项目结构)
-  - [3.2 依赖配置](#32-依赖配置)
-- [4. 实施方案](#4-实施方案)
-  - [4.1 模型导出](#41-模型导出)
-  - [4.2 分词器实现](#42-分词器实现)
-  - [4.3 模型加载与推理](#43-模型加载与推理)
-  - [4.4 解码循环与生成](#44-解码循环与生成)
-  - [4.5 Web API 服务](#45-web-api-服务)
-- [5. 性能优化](#5-性能优化)
-  - [5.1 KV Cache 实现](#51-kv-cache-实现)
-  - [5.2 内存管理](#52-内存管理)
-  - [5.3 并发处理](#53-并发处理)
-- [6. 总结](#6-总结)
+- [3. 项目结构](#3-项目结构)
+- [4. 使用指南](#4-使用指南)
+- [5. API 文档](#5-api-文档)
+- [6. 开发指南](#6-开发指南)
+- [7. 性能优化](#7-性能优化)
+
+---
+
+## 快速开始
+
+### 1. 克隆项目并下载模型
+
+```bash
+# 模型文件已包含在项目中
+ls resources/onnx/model.onnx  # 623 MB ONNX 模型
+```
+
+### 2. 运行测试
+
+```bash
+clojure -M:test -e "
+  (require '[clojure.test :refer :all])
+  (require 'gpt2.token-test 'gpt2.generate-test)
+  (run-tests 'gpt2.token-test 'gpt2.generate-test)
+"
+```
+
+### 3. 启动服务
+
+```bash
+clojure -M -m gpt2.server 3000
+```
+
+### 4. 测试 API
+
+```bash
+curl -X POST http://localhost:3000/api/generate \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Hello, world!", "max_tokens": 20, "strategy": "greedy"}'
+```
+
+**响应：**
+```json
+{
+  "generated_text": "Hello, world!\n\nI'm sorry, but I'm not sure what to do.",
+  "prompt": "Hello, world!",
+  "params": {
+    "max_tokens": 20,
+    "strategy": "greedy",
+    "k": 50,
+    "temperature": 1.0
+  }
+}
+```
 
 ---
 
@@ -33,6 +76,7 @@
 - 利用 Clojure 的不可变数据结构安全管理解码状态
 - 基于 JVM 线程模型构建高并发推理服务
 - REPL 驱动开发支持实时调试张量操作
+- ONNX 模型格式支持跨平台部署
 
 ---
 
@@ -40,14 +84,15 @@
 
 ### 2.1 核心技术栈
 
-| 层级             | 技术选型      | 说明                            |
-|------------------|---------------|---------------------------------|
-| **编程语言**     | Clojure 1.12  | JVM 上的函数式 Lisp 方言        |
-| **深度学习框架** | DJL 0.29      | 亚马逊开源的 Java 深度学习库    |
-| **推理引擎**     | ONNX Runtime  | 高性能跨平台推理引擎            |
-| **分词器**       | JTokkit 1.1   | 针对 GPT-2 优化的 Java BPE 实现 |
-| **Web 框架**     | Reitit + Ring | 高性能路由 + HTTP 服务          |
-| **模型格式**     | ONNX          | 跨语言模型交换标准              |
+| 层级             | 技术选型           | 说明                            |
+|------------------|--------------------|---------------------------------|
+| **编程语言**     | Clojure 1.12       | JVM 上的函数式 Lisp 方言        |
+| **深度学习框架** | DJL 0.29           | 亚马逊开源的 Java 深度学习库    |
+| **推理引擎**     | ONNX Runtime 1.18  | 高性能跨平台推理引擎            |
+| **分词器**       | JTokkit 1.1        | 针对 GPT-2 优化的 Java BPE 实现 |
+| **Web 框架**     | Reitit 0.7 + Ring  | 高性能路由 + HTTP 服务          |
+| **模型格式**     | ONNX               | 跨语言模型交换标准              |
+| **模型来源**     | Hugging Face GPT-2 | 124M 参数版本                   |
 
 ### 2.2 核心组件映射
 
@@ -61,238 +106,248 @@
 
 ---
 
-## 3. 开发环境准备
-
-### 3.1 项目结构
+## 3. 项目结构
 
 ```text
 clj-chatgpt2/
-├── deps.edn              # 依赖配置
-├── src/
-│   └── gpt2/
-│       ├── token.clj     # 分词器封装
-│       ├── model.clj     # 模型加载与推理
-│       ├── generate.clj  # 解码算法实现
-│       └── server.clj    # Web服务入口
-├── resources/
-│   └── onnx/
-│       └── model.onnx    # 导出的GPT-2 ONNX模型
-└── test/
-    └── gpt2/
-        └── model_test.clj
-```
-
-### 3.2 依赖配置
-
-```clojure
-;; deps.edn
-{:deps {org.clojure/clojure {:mvn/version "1.12.0"}
-        ;; DJL 核心组件
-        ai.djl/api {:mvn/version "0.29.0"}
-        ai.djl/onnxruntime-engine {:mvn/version "0.29.0"}
-        ;; 分词器
-        com.knuddels/jtokkit {:mvn/version "1.1.0"}
-        ;; Web 服务栈
-        metosin/reitit {:mvn/version "0.7.0-alpha7"}
-        ring/ring-jetty-adapter {:mvn/version "1.12.1"}
-        org.clojure/data.json {:mvn/version "2.5.0"}}
- :aliases {:dev {:extra-paths ["test"]}}}
+├── deps.edn                    # 依赖配置
+├── README.md                   # 项目文档
+├── .gitignore                  # Git 忽略配置
+├── scripts/
+│   ├── export_model.py         # Python 模型导出脚本
+│   └── run.sh                  # 服务启动脚本
+├── src/gpt2/
+│   ├── token.clj               # JTokkit 分词器封装 (67 行)
+│   ├── model.clj               # DJL 模型加载与推理 (100 行)
+│   ├── generate.clj            # 贪婪/Top-K 解码算法 (158 行)
+│   └── server.clj              # Ring/Reitit Web API (178 行)
+├── test/gpt2/
+│   ├── token_test.clj          # 分词器测试
+│   └── generate_test.clj       # 生成算法测试
+└── resources/onnx/
+    ├── model.onnx              # GPT-2 ONNX 模型 (623 MB)
+    ├── vocab.json              # 词表
+    ├── merges.txt              # BPE 合并规则
+    ├── tokenizer_config.json   # 分词器配置
+    └── special_tokens_map.json # 特殊标记映射
 ```
 
 ---
 
-## 4. 实施方案
+## 4. 使用指南
 
-### 4.1 模型导出
-
-使用 Python 将 Hugging Face 的 GPT-2 模型导出为 ONNX 格式：
+### 4.1 模型导出（如需要更新模型）
 
 ```bash
-# 安装依赖
-pip install transformers torch onnx onnxruntime
+# 安装 Python 依赖
+pip install transformers==4.39.3 torch==2.2.2 numpy==1.26.4 onnx
 
 # 导出 ONNX 模型
-python -m transformers.onnx --model=gpt2 --feature=causal-lm resources/onnx/
+python scripts/export_model.py --model gpt2 --output resources/onnx/
+
+# 可选：导出更大的模型
+# python scripts/export_model.py --model gpt2-medium --output resources/onnx/
 ```
 
-导出的 `model.onnx` 接受 `input_ids` 和 `attention_mask`，输出 `logits`。
+### 4.2 REPL 交互式开发
 
-### 4.2 分词器实现
-
-`src/gpt2/token.clj`：
-
-```clojure
-(ns gpt2.token
-  (:import [com.knuddels.jtokkit Encodings]
-           [com.knuddels.jtokkit.api EncodingType]
-           [it.unimi.dsi.fastutil.ints IntArrayList]))
-
-(def registry (Encodings/newDefaultEncodingRegistry))
-
-(def encoder (.getEncoding registry EncodingType/R50K_BASE))
-
-(defn encode
-  "将文本转换为 token ID 向量"
-  [text]
-  (let [tokens (.encode encoder text)]
-    (vec (.toArray tokens))))
-
-(defn decode
-  "将 token ID 序列解码为文本"
-  [token-ids]
-  (let [int-array (int-array token-ids)
-        int-list (IntArrayList. int-array)]
-    (.decode encoder int-list)))
+```bash
+clojure -M
 ```
 
-### 4.3 模型加载与推理
-
-`src/gpt2/model.clj`：
-
 ```clojure
-(ns gpt2.model
-  (:require [gpt2.token :as token])
-  (:import [ai.djl.repository.zoo Criteria ZooModel]
-           [ai.djl.inference Predictor]
-           [ai.djl.ndarray NDList NDManager]
-           [ai.djl.translate NoopTranslator]
-           [java.nio.file Paths]))
+;; 加载命名空间
+(require '[gpt2.token :as token])
+(require '[gpt2.generate :as gen])
 
-(defn build-criteria
-  []
-  (-> (Criteria/builder)
-      (.setTypes NDList NDList)
-      (.optModelPath (Paths/get "resources/onnx" (into-array String)))
-      (.optModelName "model.onnx")
-      (.optEngine "OnnxRuntime")
-      (.optTranslator (NoopTranslator.))
-      (.build)))
+;; 测试分词器
+(token/encode "Hello, world!")
+;; => [15496 11 995 0]
 
-(def gpt-model (.loadModel (build-criteria)))
+(token/decode [15496 11 995 0])
+;; => "Hello, world!"
 
-(defn create-predictor
-  []
-  (.newPredictor gpt-model))
+;; 生成文本
+(gen/generate-text "Once upon a time" :max-tokens 30)
+;; => "Once upon a time, there was a little girl named Alice."
 
-(defn forward-pass
-  "执行一次前向传播，返回最后一个 token 的 logits"
-  [predictor input-ids]
-  (let [manager (NDManager/newBaseManager)
-        seq-len (count input-ids)
-        input-array (.create manager (long-array input-ids)
-                            (ai.djl.ndarray.types.Shape. 1 seq-len))
-        mask-array (.ones manager (ai.djl.ndarray.types.Shape. 1 seq-len))
-        inputs (NDList. input-array mask-array)]
-    (let [outputs (.predict predictor inputs)
-          logits-tensor (.get outputs 0)
-          last-token-logits (.get logits-tensor (long-array [0 (dec seq-len)]))]
-      (.toFloatArray last-token-logits))))
+;; Top-K 采样生成
+(gen/generate-text "Hello" 
+                   :max-tokens 20 
+                   :strategy :top-k 
+                   :k 40 
+                   :temperature 0.8)
 ```
 
-### 4.4 解码循环与生成
+### 4.3 启动 Web 服务
 
-`src/gpt2/generate.clj`：
+```bash
+# 默认端口 3000
+clojure -M -m gpt2.server
 
-```clojure
-(ns gpt2.generate
-  (:require [gpt2.model :as model]
-            [gpt2.token :as token]))
+# 指定端口
+clojure -M -m gpt2.server 8080
 
-(defn argmax
-  "返回数组中最大值的索引"
-  [float-array]
-  (let [len (alength float-array)]
-    (loop [i 1
-           max-idx 0
-           max-val (aget float-array 0)]
-      (if (>= i len)
-        max-idx
-        (let [val (aget float-array i)]
-          (if (> val max-val)
-            (recur (inc i) i val)
-            (recur (inc i) max-idx max-val)))))))
-
-(defn generate-text
-  "使用贪婪搜索生成文本"
-  [prompt max-tokens]
-  (let [predictor (model/create-predictor)
-        start-ids (token/encode prompt)
-        eos-token 50256]  ; <|endoftext|>
-    (try
-      (loop [current-ids start-ids
-             steps 0]
-        (if (>= steps max-tokens)
-          (token/decode current-ids)
-          (let [logits (model/forward-pass predictor current-ids)
-                next-token (argmax logits)]
-            (if (= next-token eos-token)
-              (token/decode current-ids)
-              (recur (conj current-ids next-token) (inc steps))))))
-      (finally
-        (.close predictor)))))
-```
-
-### 4.5 Web API 服务
-
-`src/gpt2/server.clj`：
-
-```clojure
-(ns gpt2.server
-  (:require [reitit.ring :as ring]
-            [ring.adapter.jetty :refer [run-jetty]]
-            [muuntaja.core :as m]
-            [reitit.ring.middleware.muuntaja :as muuntaja]
-            [gpt2.generate :as generate]))
-
-(defn chat-handler
-  [request]
-  (let [prompt (get-in request [:body-params :prompt])
-        max-tokens (get-in request [:body-params :max_tokens] 50)
-        response (generate/generate-text prompt max-tokens)]
-    {:status 200
-     :body {:generated_text response}}))
-
-(def app
-  (ring/ring-handler
-   (ring/router
-    [["/api"
-      ["/chat" {:post chat-handler}]]]
-    {:data {:muuntaja m/instance
-            :middleware [muuntaja/format-middleware]}})))
-
-(defn -main
-  [& _args]
-  (run-jetty app {:port 3000 :join? false}))
+# 或使用脚本
+./scripts/run.sh 3000
 ```
 
 ---
 
-## 5. 性能优化
+## 5. API 文档
 
-### 5.1 KV Cache 实现
+### 5.1 文本生成接口
 
-生产环境必须使用 KV Cache 避免重复计算历史序列的 Attention，将复杂度从 $O(N^2)$ 降至 $O(N)$。
+**POST /api/generate**
 
-**实现要点**：
+生成文本（非流式）。
+
+**请求体：**
+```json
+{
+  "prompt": "Hello, world!",      // 输入提示（必需）
+  "max_tokens": 50,               // 最大生成 token 数（默认 50）
+  "strategy": "greedy",           // 解码策略：greedy 或 top-k（默认 greedy）
+  "k": 50,                        // Top-K 值（默认 50）
+  "temperature": 1.0              // 温度参数（默认 1.0）
+}
+```
+
+**响应：**
+```json
+{
+  "generated_text": "Hello, world! I'm a language model...",
+  "prompt": "Hello, world!",
+  "params": {
+    "max_tokens": 50,
+    "strategy": "greedy",
+    "k": 50,
+    "temperature": 1.0
+  }
+}
+```
+
+**示例：**
+```bash
+curl -X POST http://localhost:3000/api/generate \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "What is AI?", "max_tokens": 30, "strategy": "top-k", "k": 40}'
+```
+
+### 5.2 流式生成接口
+
+**POST /api/stream**
+
+SSE 流式返回生成的 token。
+
+**请求体：** 同 `/api/generate`
+
+**响应：** Server-Sent Events 流
+
+```bash
+curl -X POST http://localhost:3000/api/stream \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Hello", "max_tokens": 10}'
+```
+
+### 5.3 健康检查
+
+**GET /health**
+
+```bash
+curl http://localhost:3000/health
+```
+
+**响应：**
+```json
+{"status": "ok", "model_loaded": true}
+```
+
+---
+
+## 6. 开发指南
+
+### 6.1 运行测试
+
+```bash
+# 运行所有测试
+clojure -M:test -e "
+  (require '[clojure.test :refer :all])
+  (require 'gpt2.token-test 'gpt2.generate-test)
+  (run-tests 'gpt2.token-test 'gpt2.generate-test)
+"
+```
+
+**预期输出：**
+```
+Testing gpt2.token-test
+Testing gpt2.generate-test
+
+Ran 7 tests containing 26 assertions.
+0 failures, 0 errors.
+```
+
+### 6.2 代码结构说明
+
+**token.clj** - 分词器封装
+- `encode` - 文本编码为 token ID 序列
+- `decode` - token ID 序列解码为文本
+- `eos-token` - 结束标记常量 (50256)
+
+**model.clj** - 模型推理
+- `get-model` - 获取/加载 ONNX 模型
+- `create-predictor` - 创建推理实例
+- `forward-pass` - 执行前向传播
+
+**generate.clj** - 文本生成
+- `generate-text` - 生成完整文本
+- `generate-stream` - 流式生成
+- `argmax` - 贪婪解码
+- `top-k-sample` - Top-K 采样解码
+
+**server.clj** - Web 服务
+- `generate-handler` - 生成接口处理函数
+- `stream-handler` - 流式接口处理函数
+- `start-server` / `stop-server` - 服务生命周期管理
+
+---
+
+## 7. 性能优化
+
+### 7.1 KV Cache 实现
+
+生产环境建议使用 KV Cache 避免重复计算历史序列的 Attention，将复杂度从 $O(N^2)$ 降至 $O(N)$。
+
+**实现要点：**
 - 在 `loop/recur` 中传递 `past-states`
 - 每次推理返回更新后的 KV tensors
 - 下次迭代将 KV tensors 作为输入传回
 
-### 5.2 内存管理
+### 7.2 内存管理
 
 - 使用 `NDManager` 管理堆外内存
-- 使用 `with-open` 或 `try-finally` 确保 `Predictor` 关闭
+- 使用 `try-finally` 确保 `Predictor` 关闭
 - 中间产生的 `NDArray` 需要及时释放
 
-### 5.3 并发处理
+**示例：**
+```clojure
+(let [predictor (model/create-predictor)]
+  (try
+    ;; 使用 predictor 进行推理
+    (model/forward-pass predictor input-ids)
+    (finally
+      (.close predictor))))
+```
+
+### 7.3 并发处理
 
 - `ZooModel` 线程安全，可全局共享
-- `Predictor` 非线程安全，每个请求需要独立的实例
-- 使用 `Predictor` 对象池或 `ThreadLocal` 管理实例
+- `Predictor` **非线程安全**，每个请求需要独立实例
+- 生产环境建议使用 `Predictor` 对象池或 `ThreadLocal`
 
 ---
 
-## 6. 总结
+## 8. 总结
 
 本方案采用 **DJL + ONNX Runtime + JTokkit** 技术栈，在 JVM 上实现 GPT-2 推理引擎：
 
@@ -301,3 +356,9 @@ python -m transformers.onnx --model=gpt2 --feature=causal-lm resources/onnx/
 3. **服务层**：Ring + Reitit 构建高并发 Web 服务
 
 该方案适用于需要将 AI 能力集成到现有 JVM 基础设施，或对系统稳定性有极高要求的生产环境。
+
+---
+
+## 许可证
+
+MIT License

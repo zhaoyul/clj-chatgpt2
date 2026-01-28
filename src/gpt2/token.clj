@@ -17,10 +17,10 @@
 
 (defn encode
   "将文本字符串转换为 token ID 向量
-   
+
    参数:
      text - 输入文本字符串
-   
+
    返回:
      token ID 的 vector"
   [text]
@@ -30,10 +30,10 @@
 
 (defn decode
   "将 token ID 序列解码回文本字符串
-   
+
    参数:
      token-ids - token ID 序列 (vector 或 seq)
-   
+
    返回:
      解码后的文本字符串"
   [token-ids]
