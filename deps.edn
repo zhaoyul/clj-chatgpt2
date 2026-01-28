@@ -13,5 +13,4 @@
         ;; Clerk notebook
         io.github.nextjournal/clerk {:mvn/version "0.18.1158"}}
  :aliases {:dev {:extra-paths ["test"]}
-           :run {:main-opts ["-m" "gpt2.server"]}
-           :clerk {:main-opts ["-m" "clerk.build" "--watch" "notebooks"]}}}
+           :run {:main-opts ["-m" "gpt2.server"]}}}

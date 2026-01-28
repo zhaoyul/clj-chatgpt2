@@ -270,22 +270,22 @@
 ;; 展示数据在网络中的流动：
 
 (clerk/html
-  [:div.bg-gray-50.p-4.rounded.overflow-x-auto
-   [:h3.font-bold.mb-4 "数据流维度变化"]
-   [:table.w-full.text-sm
-    [:thead
-     [:tr.bg-gray-200
-      [:th.p-2 "阶段"] [:th.p-2 "操作"] [:th.p-2 "输入形状"] [:th.p-2 "输出形状"]
-      [:th.p-2 "参数量"] [:th.p-2 "计算类型"]]]
-    [:tbody
-     [:tr.border-b
-      [:td.p-2.font-semibold "Input"] [:td.p-2 "Tokenization"]
-      [:td.p-2.font-mono "'Hello world'"] [:td.p-2.font-mono "[2]"]
-      [:td.p-2 "-"] [:td.p-2 "查找"]]
-     [:tr.border-b.bg-blue-50
-      [:td.p-2.font-semibold "Embedding"] [:td.p-2 "Lookup + Pos Encode"
-      [:td.p-2.font-mono "[2]"] [:td.p-2.font-mono "[1, 2, 768]"]
-      [:td.p-2 "39.4M"] [:td.p-2 "嵌入"]]
+ [:div.bg-gray-50.p-4.rounded.overflow-x-auto
+  [:h3.font-bold.mb-4 "数据流维度变化"]
+  [:table.w-full.text-sm
+   [:thead
+    [:tr.bg-gray-200
+     [:th.p-2 "阶段"] [:th.p-2 "操作"] [:th.p-2 "输入形状"] [:th.p-2 "输出形状"]
+     [:th.p-2 "参数量"] [:th.p-2 "计算类型"]]]
+   [:tbody
+    [:tr.border-b
+     [:td.p-2.font-semibold "Input"] [:td.p-2 "Tokenization"]
+     [:td.p-2.font-mono "'Hello world'"] [:td.p-2.font-mono "[2]"]
+     [:td.p-2 "-"] [:td.p-2 "查找"]]
+    [:tr.border-b.bg-blue-50
+     [:td.p-2.font-semibold "Embedding"] [:td.p-2 "Lookup + Pos Encode"
+                                          [:td.p-2.font-mono "[2]"] [:td.p-2.font-mono "[1, 2, 768]"]
+                                          [:td.p-2 "39.4M"] [:td.p-2 "嵌入"]]
      (for [layer (range 1 4)]
        [:tr.border-b {:class (if (odd? layer) "bg-gray-50" "")}
         [:td.p-2.font-semibold (str "Layer " layer)]
@@ -302,12 +302,12 @@
       [:td.p-2 "7.1M"] [:td.p-2 "线性 + 注意力"]]
      [:tr.border-b.bg-orange-50
       [:td.p-2.font-semibold "Output"] [:td.p-2 "LM Head"
-      [:td.p-2.font-mono "[1, 2, 768]"] [:td.p-2.font-mono "[1, 2, 50257]"]
-      [:td.p-2 "38.6M"] [:td.p-2 "线性投影"]]
-     [:tr.bg-red-50
-      [:td.p-2.font-semibold "Prediction"] [:td.p-2 "Argmax/Sampling"]
-      [:td.p-2.font-mono "[1, 2, 50257]"] [:td.p-2.font-mono "token ID"
-      [:td.p-2 "-"] [:td.p-2 "解码"]]]]])
+                                        [:td.p-2.font-mono "[1, 2, 768]"] [:td.p-2.font-mono "[1, 2, 50257]"]
+                                        [:td.p-2 "38.6M"] [:td.p-2 "线性投影"]]
+      [:tr.bg-red-50
+       [:td.p-2.font-semibold "Prediction"] [:td.p-2 "Argmax/Sampling"]
+       [:td.p-2.font-mono "[1, 2, 50257]"] [:td.p-2.font-mono "token ID"
+                                            [:td.p-2 "-"] [:td.p-2 "解码"]]]]]]]])
 
 ;; ## 7. 层次化计算复杂度
 

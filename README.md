@@ -76,19 +76,28 @@ curl -X POST http://localhost:3000/api/generate \
 ### 启动 Notebook 服务器
 
 ```bash
+# 使用脚本启动（默认端口 7788）
 ./scripts/clerk.sh
-# 或
-clojure -M:clerk
+
+# 指定端口
+./scripts/clerk.sh 8080
+
+# 或直接运行
+clojure -M -e "
+(require '[nextjournal.clerk :as clerk])
+(clerk/serve! {:browse? true :watch-paths ['notebooks'] :port 7788})
+@(promise)
+"
 ```
 
 ### Notebook 列表
 
 | Notebook | 内容 | URL |
 |----------|------|-----|
-| **🏠 首页** | Notebook 索引和导航 | http://localhost:7777 |
-| **🏗️ 模型架构** | 整体架构、参数分布、ONNX 结构 | http://localhost:7777/notebooks/model_architecture |
-| **🎯 注意力机制** | 自注意力、多头注意力、因果掩码 | http://localhost:7777/notebooks/attention_mechanism |
-| **🔬 神经网络层** | 权重矩阵、激活函数、信息流动 | http://localhost:7777/notebooks/layer_visualization |
+| **🏠 首页** | Notebook 索引和导航 | http://localhost:7788/notebooks/index |
+| **🏗️ 模型架构** | 整体架构、参数分布、ONNX 结构 | http://localhost:7788/notebooks/model_architecture |
+| **🎯 注意力机制** | 自注意力、多头注意力、因果掩码 | http://localhost:7788/notebooks/attention_mechanism |
+| **🔬 神经网络层** | 权重矩阵、激活函数、信息流动 | http://localhost:7788/notebooks/layer_visualization |
 
 ### 可视化示例
 

@@ -1,15 +1,28 @@
 #!/bin/bash
 # Clerk Notebook 启动脚本
 
+PORT=${1:-7788}
+
 echo "🚀 启动 Clerk Notebook 服务器..."
-echo ""
-echo "Notebook 地址:"
-echo "  - 首页: http://localhost:7777"
-echo "  - 模型架构: http://localhost:7777/notebooks/model_architecture"
-echo "  - 注意力机制: http://localhost:7777/notebooks/attention_mechanism"
-echo "  - 神经网络层: http://localhost:7777/notebooks/layer_visualization"
-echo ""
-echo "按 Ctrl+C 停止服务"
+echo "   Port: $PORT"
 echo ""
 
-clojure -M:clerk
+clojure -M -e "
+(require '[nextjournal.clerk :as clerk])
+(println \"🚀 正在启动 Clerk Notebook 服务器...\")
+(def server
+  (clerk/serve! {:browse? true 
+                 :watch-paths [\"notebooks\"]
+                 :port $PORT}))
+(println \"\")
+(println \"✅ Clerk server started!\")
+(println \"\")
+(println \"📚 Notebook URLs:\")
+(println \"   Homepage:     http://localhost:$PORT/notebooks/index\")
+(println \"   Architecture: http://localhost:$PORT/notebooks/model_architecture\")
+(println \"   Attention:    http://localhost:$PORT/notebooks/attention_mechanism\")
+(println \"   Layers:       http://localhost:$PORT/notebooks/layer_visualization\")
+(println \"\")
+(println \"Press Ctrl+C to stop\")
+@(promise)
+"
