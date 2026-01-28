@@ -107,6 +107,40 @@
       (response 500 {:error "Stream generation failed"
                      :message (.getMessage e)}))))
 
+(defn qa-handler
+  "问答接口
+   
+   请求体:
+     {
+       :question string        ; 问题文本（必需）
+       :max_tokens int         ; 最大生成长度（默认 100）
+       :temperature float      ; 温度参数（默认 0.7）
+       :template string        ; 模板类型: default/detailed/creative（默认 default）
+     }"
+  [request]
+  (try
+    (require '[gpt2.qa :as qa])
+    (let [body (:body-params request {})
+          question (:question body)
+          max-tokens (parse-int (:max_tokens body) 100)
+          temperature (parse-float (:temperature body) 0.7)
+          template (keyword (or (:template body) "default"))]
+      (if (empty? question)
+        (response 400 {:error "Missing required parameter: question"})
+        (let [result (qa/answer question
+                                :max-tokens max-tokens
+                                :temperature temperature
+                                :template template)]
+          (response {:question (:question result)
+                     :answer (:answer result)
+                     :params {:max_tokens max-tokens
+                              :temperature temperature
+                              :template template}}))))
+    (catch Exception e
+      (.printStackTrace e)
+      (response 500 {:error "QA failed"
+                     :message (.getMessage e)}))))
+
 (def app
   "Ring 应用路由"
   (ring/ring-handler
@@ -114,7 +148,8 @@
     [["/health" {:get health-handler}]
      ["/api"
       ["/generate" {:post generate-handler}]
-      ["/stream" {:post stream-handler}]]]
+      ["/stream" {:post stream-handler}]
+      ["/qa" {:post qa-handler}]]]
     {:data {:muuntaja m/instance
             :middleware [muuntaja/format-middleware
                          ;; 添加 CORS 支持

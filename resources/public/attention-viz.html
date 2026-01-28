@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPT-2 Attention Visualizer</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .controls {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        label {
+            font-weight: 600;
+            color: #555;
+        }
+        input[type="text"] {
+            padding: 10px 15px;
+            font-size: 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            width: 300px;
+            transition: border-color 0.3s;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        select {
+            padding: 10px 15px;
+            font-size: 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+        }
+        button {
+            padding: 10px 24px;
+            font-size: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        .viz-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+        @media (max-width: 900px) {
+            .viz-container {
+                grid-template-columns: 1fr;
+            }
+        }
+        .panel {
+            background: #fff;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .panel h3 {
+            margin-top: 0;
+            color: #444;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        #heatmap-viz, #graph-viz {
+            width: 100%;
+            min-height: 400px;
+        }
+        .token-label {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            fill: #333;
+        }
+        .tooltip {
+            position: absolute;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧠 GPT-2 Attention Visualizer</h1>
+        <p class="subtitle">交互式 Transformer 注意力机制可视化</p>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label>输入文本:</label>
+                <input type="text" id="input-text" value="Hello world" />
+            </div>
+            <button onclick="generateVisualization()">生成可视化</button>
+            <div class="control-group">
+                <label>层:</label>
+                <select id="layer-select" onchange="updateVisualization()">
+                    <option value="0">Layer 1</option>
+                    <option value="6">Layer 7</option>
+                    <option value="11" selected>Layer 12</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>注意力头:</label>
+                <select id="head-select" onchange="updateVisualization()">
+                    <option value="0">Head 1</option>
+                    <option value="3">Head 4</option>
+                    <option value="6">Head 7</option>
+                    <option value="11" selected>Head 12</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="viz-container">
+            <div class="panel">
+                <h3>🔥 注意力热力图</h3>
+                <div id="heatmap-viz"></div>
+            </div>
+            <div class="panel">
+                <h3>🕸️ 注意力连接图</h3>
+                <div id="graph-viz"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        // 模拟数据生成
+        let currentTokens = ["Hello", "world"];
+        let currentAttentionMatrix = [];
+
+        function generateAttentionMatrix(tokens, seed = 42) {
+            const n = tokens.length;
+            const matrix = [];
+            
+            // 伪随机数生成器
+            let random = seed;
+            function nextRandom() {
+                random = (random * 9301 + 49297) % 233280;
+                return random / 233280;
+            }
+            
+            for (let i = 0; i < n; i++) {
+                const row = [];
+                let sum = 0;
+                
+                for (let j = 0; j <= i; j++) {
+                    // 对角线附近值更高
+                    const distance = i - j;
+                    const baseWeight = Math.exp(-distance * 0.3);
+                    const randomWeight = nextRandom() * 0.3;
+                    const weight = baseWeight + randomWeight;
+                    row.push(weight);
+                    sum += weight;
+                }
+                
+                // 填充上三角为 0（因果掩码）
+                for (let j = i + 1; j < n; j++) {
+                    row.push(0);
+                }
+                
+                // Softmax 归一化
+                for (let j = 0; j <= i; j++) {
+                    row[j] = row[j] / sum;
+                }
+                
+                matrix.push(row);
+            }
+            
+            return matrix;
+        }
+
+        function generateVisualization() {
+            const text = document.getElementById('input-text').value;
+            // 简单的 tokenization
+            currentTokens = text.split(/\s+/).filter(t => t.length > 0);
+            
+            if (currentTokens.length === 0) {
+                currentTokens = ["Hello", "world"];
+            }
+            
+            updateVisualization();
+        }
+
+        function updateVisualization() {
+            const layer = parseInt(document.getElementById('layer-select').value);
+            const head = parseInt(document.getElementById('head-select').value);
+            
+            // 使用层和头作为种子生成不同的注意力模式
+            const seed = (layer + 1) * 100 + (head + 1) * 10;
+            currentAttentionMatrix = generateAttentionMatrix(currentTokens, seed);
+            
+            drawHeatmap();
+            drawGraph();
+        }
+
+        function drawHeatmap() {
+            const container = document.getElementById('heatmap-viz');
+            container.innerHTML = '';
+            
+            const width = container.clientWidth;
+            const height = 400;
+            const margin = { top: 50, right: 50, bottom: 80, left: 80 };
+            const innerWidth = width - margin.left - margin.right;
+            const innerHeight = height - margin.top - margin.bottom;
+            
+            const svg = d3.select('#heatmap-viz')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height);
+            
+            const g = svg.append('g')
+                .attr('transform', `translate(${margin.left},${margin.top})`);
+            
+            const n = currentTokens.length;
+            const cellSize = Math.min(innerWidth / n, innerHeight / n);
+            
+            // 颜色比例尺
+            const colorScale = d3.scaleSequential(d3.interpolateBlues)
+                .domain([0, 0.5]);
+            
+            // 绘制热力图单元格
+            currentAttentionMatrix.forEach((row, i) => {
+                row.forEach((value, j) => {
+                    g.append('rect')
+                        .attr('x', j * cellSize)
+                        .attr('y', i * cellSize)
+                        .attr('width', cellSize - 1)
+                        .attr('height', cellSize - 1)
+                        .attr('fill', value > 0 ? colorScale(value) : '#f0f0f0')
+                        .attr('stroke', 'white')
+                        .attr('stroke-width', 1)
+                        .on('mouseover', function(event) {
+                            const tooltip = document.getElementById('tooltip');
+                            tooltip.style.opacity = 1;
+                            tooltip.style.left = event.pageX + 10 + 'px';
+                            tooltip.style.top = event.pageY - 10 + 'px';
+                            tooltip.innerHTML = `${currentTokens[i]} → ${currentTokens[j]}<br>权重: ${(value * 100).toFixed(1)}%`;
+                        })
+                        .on('mouseout', function() {
+                            document.getElementById('tooltip').style.opacity = 0;
+                        });
+                    
+                    // 添加数值标签（如果单元格足够大）
+                    if (cellSize > 40 && value > 0.01) {
+                        g.append('text')
+                            .attr('x', j * cellSize + cellSize / 2)
+                            .attr('y', i * cellSize + cellSize / 2)
+                            .attr('text-anchor', 'middle')
+                            .attr('dominant-baseline', 'middle')
+                            .attr('font-size', '10px')
+                            .attr('fill', value > 0.25 ? 'white' : '#333')
+                            .text((value * 100).toFixed(0));
+                    }
+                });
+            });
+            
+            // 添加行列标签
+            const axisGroup = g.append('g').attr('class', 'axis');
+            
+            // X轴标签（Key）
+            currentTokens.forEach((token, i) => {
+                axisGroup.append('text')
+                    .attr('x', i * cellSize + cellSize / 2)
+                    .attr('y', -10)
+                    .attr('text-anchor', 'middle')
+                    .attr('class', 'token-label')
+                    .text(token);
+                
+                axisGroup.append('text')
+                    .attr('x', i * cellSize + cellSize / 2)
+                    .attr('y', n * cellSize + 20)
+                    .attr('text-anchor', 'middle')
+                    .attr('class', 'token-label')
+                    .attr('transform', `rotate(-45, ${i * cellSize + cellSize / 2}, ${n * cellSize + 20})`)
+                    .text(token);
+            });
+            
+            // Y轴标签（Query）
+            currentTokens.forEach((token, i) => {
+                axisGroup.append('text')
+                    .attr('x', -10)
+                    .attr('y', i * cellSize + cellSize / 2)
+                    .attr('text-anchor', 'end')
+                    .attr('dominant-baseline', 'middle')
+                    .attr('class', 'token-label')
+                    .text(token);
+            });
+            
+            // 添加标题
+            svg.append('text')
+                .attr('x', width / 2)
+                .attr('y', 20)
+                .attr('text-anchor', 'middle')
+                .attr('font-size', '14px')
+                .attr('font-weight', 'bold')
+                .text(`Layer ${parseInt(document.getElementById('layer-select').value) + 1}, Head ${parseInt(document.getElementById('head-select').value) + 1}`);
+        }
+
+        function drawGraph() {
+            const container = document.getElementById('graph-viz');
+            container.innerHTML = '';
+            
+            const width = container.clientWidth;
+            const height = 400;
+            const margin = { top: 30, right: 30, bottom: 30, left: 30 };
+            const innerWidth = width - margin.left - margin.right;
+            const innerHeight = height - margin.top - margin.bottom;
+            
+            const svg = d3.select('#graph-viz')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height);
+            
+            const g = svg.append('g')
+                .attr('transform', `translate(${margin.left},${margin.top})`);
+            
+            const n = currentTokens.length;
+            
+            // 计算节点位置（两侧排列）
+            const leftX = 50;
+            const rightX = innerWidth - 50;
+            const nodeSpacing = innerHeight / (n + 1);
+            
+            // 绘制连接线
+            currentAttentionMatrix.forEach((row, i) => {
+                row.forEach((weight, j) => {
+                    if (weight > 0.05) { // 只显示显著连接
+                        g.append('line')
+                            .attr('x1', leftX)
+                            .attr('y1', (j + 1) * nodeSpacing)
+                            .attr('x2', rightX)
+                            .attr('y2', (i + 1) * nodeSpacing)
+                            .attr('stroke', '#667eea')
+                            .attr('stroke-width', weight * 10)
+                            .attr('stroke-opacity', 0.6)
+                            .attr('fill', 'none');
+                    }
+                });
+            });
+            
+            // 绘制节点（左侧 - Key）
+            currentTokens.forEach((token, i) => {
+                g.append('circle')
+                    .attr('cx', leftX)
+                    .attr('cy', (i + 1) * nodeSpacing)
+                    .attr('r', 20)
+                    .attr('fill', '#764ba2')
+                    .attr('stroke', 'white')
+                    .attr('stroke-width', 2);
+                
+                g.append('text')
+                    .attr('x', leftX - 30)
+                    .attr('y', (i + 1) * nodeSpacing)
+                    .attr('text-anchor', 'end')
+                    .attr('dominant-baseline', 'middle')
+                    .attr('font-size', '12px')
+                    .attr('fill', '#333')
+                    .text(token);
+            });
+            
+            // 绘制节点（右侧 - Query）
+            currentTokens.forEach((token, i) => {
+                g.append('circle')
+                    .attr('cx', rightX)
+                    .attr('cy', (i + 1) * nodeSpacing)
+                    .attr('r', 20)
+                    .attr('fill', '#667eea')
+                    .attr('stroke', 'white')
+                    .attr('stroke-width', 2);
+                
+                g.append('text')
+                    .attr('x', rightX + 30)
+                    .attr('y', (i + 1) * nodeSpacing)
+                    .attr('text-anchor', 'start')
+                    .attr('dominant-baseline', 'middle')
+                    .attr('font-size', '12px')
+                    .attr('fill', '#333')
+                    .text(token);
+            });
+            
+            // 添加图例
+            const legendGroup = g.append('g').attr('transform', `translate(0, ${innerHeight + 10})`);
+            legendGroup.append('text')
+                .attr('x', leftX)
+                .attr('y', 0)
+                .attr('font-size', '12px')
+                .attr('font-weight', 'bold')
+                .text('Key (被注意的词)');
+            
+            legendGroup.append('text')
+                .attr('x', rightX)
+                .attr('y', 0)
+                .attr('text-anchor', 'end')
+                .attr('font-size', '12px')
+                .attr('font-weight', 'bold')
+                .text('Query (当前词)');
+        }
+
+        // 初始化
+        generateVisualization();
+
+        // 窗口大小改变时重绘
+        window.addEventListener('resize', () => {
+            drawHeatmap();
+            drawGraph();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPT-2 Attention Visualizer (Dynamic)</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 { text-align: center; color: #333; margin-bottom: 10px; }
+        .subtitle { text-align: center; color: #666; margin-bottom: 30px; }
+        .api-status {
+            text-align: center;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .api-status.connected { background: #d4edda; color: #155724; }
+        .api-status.error { background: #f8d7da; color: #721c24; }
+        .api-status.loading { background: #fff3cd; color: #856404; }
+        .controls {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .control-group { display: flex; align-items: center; gap: 8px; }
+        label { font-weight: 600; color: #555; }
+        input[type="text"], input[type="url"] {
+            padding: 10px 15px;
+            font-size: 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            width: 300px;
+        }
+        select { padding: 10px 15px; font-size: 14px; border: 2px solid #e0e0e0; border-radius: 8px; }
+        button {
+            padding: 10px 24px;
+            font-size: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .viz-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+        @media (max-width: 900px) { .viz-container { grid-template-columns: 1fr; } }
+        .panel {
+            background: #fff;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            position: relative;
+        }
+        .panel h3 {
+            margin-top: 0;
+            color: #444;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        #heatmap-viz, #graph-viz { width: 100%; min-height: 400px; }
+        .tooltip {
+            position: absolute;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Dynamic GPT-2 Attention Visualizer</h1>
+        <p class="subtitle">Connects to real GPT-2 model for attention weights</p>
+        
+        <div id="api-status" class="api-status loading">Connecting to API...</div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label>API URL:</label>
+                <input type="url" id="api-url" value="http://localhost:5000" />
+            </div>
+            <button onclick="testConnection()">Test Connection</button>
+            <div class="control-group">
+                <label>Text:</label>
+                <input type="text" id="input-text" value="Hello world" />
+            </div>
+            <button id="analyze-btn" onclick="analyzeAttention()" disabled>Analyze</button>
+        </div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label>Layer:</label>
+                <select id="layer-select" onchange="updateVisualization()"></select>
+            </div>
+            <div class="control-group">
+                <label>Head:</label>
+                <select id="head-select" onchange="updateVisualization()"></select>
+            </div>
+        </div>
+        
+        <div class="viz-container">
+            <div class="panel">
+                <h3>Attention Heatmap</h3>
+                <div id="heatmap-viz"></div>
+            </div>
+            <div class="panel">
+                <h3>Attention Graph</h3>
+                <div id="graph-viz"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        let apiBaseUrl = 'http://localhost:5000';
+        let currentData = null;
+        let isConnected = false;
+
+        async function testConnection() {
+            apiBaseUrl = document.getElementById('api-url').value;
+            const statusEl = document.getElementById('api-status');
+            statusEl.className = 'api-status loading';
+            statusEl.textContent = 'Testing connection...';
+            
+            try {
+                const response = await fetch(apiBaseUrl + '/health');
+                if (response.ok) {
+                    isConnected = true;
+                    statusEl.className = 'api-status connected';
+                    statusEl.textContent = 'Connected to GPT-2 API';
+                    document.getElementById('analyze-btn').disabled = false;
+                    
+                    const infoRes = await fetch(apiBaseUrl + '/api/model-info');
+                    const info = await infoRes.json();
+                    populateSelectors(info);
+                } else {
+                    throw new Error('API returned error');
+                }
+            } catch (err) {
+                isConnected = false;
+                statusEl.className = 'api-status error';
+                statusEl.textContent = 'Failed to connect: ' + err.message;
+                document.getElementById('analyze-btn').disabled = true;
+            }
+        }
+
+        function populateSelectors(info) {
+            const layerSelect = document.getElementById('layer-select');
+            const headSelect = document.getElementById('head-select');
+            layerSelect.innerHTML = '';
+            headSelect.innerHTML = '';
+            for (let i = 0; i < info.num_layers; i++) {
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.text = 'Layer ' + (i + 1);
+                if (i === info.num_layers - 1) opt.selected = true;
+                layerSelect.appendChild(opt);
+            }
+            for (let i = 0; i < info.num_heads; i++) {
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.text = 'Head ' + (i + 1);
+                if (i === info.num_heads - 1) opt.selected = true;
+                headSelect.appendChild(opt);
+            }
+        }
+
+        async function analyzeAttention() {
+            const text = document.getElementById('input-text').value;
+            const btn = document.getElementById('analyze-btn');
+            btn.disabled = true;
+            btn.textContent = 'Analyzing...';
+            
+            try {
+                const response = await fetch(apiBaseUrl + '/api/attention', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text })
+                });
+                currentData = await response.json();
+                updateVisualization();
+            } catch (err) {
+                alert('Error: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Analyze';
+            }
+        }
+
+        function updateVisualization() {
+            if (!currentData) return;
+            
+            const layerIdx = document.getElementById('layer-select').value;
+            const headIdx = document.getElementById('head-select').value;
+            const layerKey = 'layer_' + layerIdx;
+            const headKey = 'head_' + headIdx;
+            
+            if (currentData.attention[layerKey] && currentData.attention[layerKey][headKey]) {
+                const matrix = currentData.attention[layerKey][headKey];
+                drawHeatmap(matrix, currentData.tokens);
+                drawGraph(matrix, currentData.tokens);
+            }
+        }
+
+        function drawHeatmap(matrix, tokens) {
+            const container = document.getElementById('heatmap-viz');
+            container.innerHTML = '';
+            const width = container.clientWidth;
+            const height = 400;
+            const margin = { top: 50, right: 50, bottom: 80, left: 80 };
+            const innerWidth = width - margin.left - margin.right;
+            const innerHeight = height - margin.top - margin.bottom;
+            
+            const svg = d3.select('#heatmap-viz').append('svg').attr('width', width).attr('height', height);
+            const g = svg.append('g').attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+            
+            const n = tokens.length;
+            const cellSize = Math.min(innerWidth / n, innerHeight / n);
+            const colorScale = d3.scaleSequential(d3.interpolateBlues).domain([0, 0.5]);
+            
+            matrix.forEach((row, i) => {
+                row.forEach((value, j) => {
+                    g.append('rect')
+                        .attr('x', j * cellSize)
+                        .attr('y', i * cellSize)
+                        .attr('width', cellSize - 1)
+                        .attr('height', cellSize - 1)
+                        .attr('fill', value > 0 ? colorScale(value) : '#f0f0f0')
+                        .on('mouseover', function(event) {
+                            const tooltip = document.getElementById('tooltip');
+                            tooltip.style.opacity = 1;
+                            tooltip.style.left = event.pageX + 10 + 'px';
+                            tooltip.style.top = event.pageY - 10 + 'px';
+                            tooltip.innerHTML = tokens[i] + ' -> ' + tokens[j] + '<br>Weight: ' + (value * 100).toFixed(1) + '%';
+                        })
+                        .on('mouseout', function() {
+                            document.getElementById('tooltip').style.opacity = 0;
+                        });
+                });
+            });
+            
+            // Labels
+            const axisGroup = g.append('g');
+            tokens.forEach((token, i) => {
+                axisGroup.append('text').attr('x', i * cellSize + cellSize / 2).attr('y', -10)
+                    .attr('text-anchor', 'middle').style('font-family', 'monospace').style('font-size', '12px').text(token);
+                axisGroup.append('text').attr('x', -10).attr('y', i * cellSize + cellSize / 2)
+                    .attr('text-anchor', 'end').style('font-family', 'monospace').style('font-size', '12px').text(token);
+            });
+        }
+
+        function drawGraph(matrix, tokens) {
+            const container = document.getElementById('graph-viz');
+            container.innerHTML = '';
+            const width = container.clientWidth;
+            const height = 400;
+            const margin = { top: 30, right: 30, bottom: 30, left: 30 };
+            const innerWidth = width - margin.left - margin.right;
+            const innerHeight = height - margin.top - margin.bottom;
+            
+            const svg = d3.select('#graph-viz').append('svg').attr('width', width).attr('height', height);
+            const g = svg.append('g').attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+            
+            const n = tokens.length;
+            const leftX = 50;
+            const rightX = innerWidth - 50;
+            const nodeSpacing = innerHeight / (n + 1);
+            
+            // Draw connections
+            matrix.forEach((row, i) => {
+                row.forEach((weight, j) => {
+                    if (weight > 0.05) {
+                        g.append('line')
+                            .attr('x1', leftX)
+                            .attr('y1', (j + 1) * nodeSpacing)
+                            .attr('x2', rightX)
+                            .attr('y2', (i + 1) * nodeSpacing)
+                            .attr('stroke', '#667eea')
+                            .attr('stroke-width', weight * 10)
+                            .attr('stroke-opacity', 0.6);
+                    }
+                });
+            });
+            
+            // Draw nodes
+            tokens.forEach((token, i) => {
+                g.append('circle').attr('cx', leftX).attr('cy', (i + 1) * nodeSpacing).attr('r', 20)
+                    .attr('fill', '#764ba2').attr('stroke', 'white').attr('stroke-width', 2);
+                g.append('text').attr('x', leftX - 30).attr('y', (i + 1) * nodeSpacing)
+                    .attr('text-anchor', 'end').attr('dominant-baseline', 'middle').style('font-size', '12px').text(token);
+                
+                g.append('circle').attr('cx', rightX).attr('cy', (i + 1) * nodeSpacing).attr('r', 20)
+                    .attr('fill', '#667eea').attr('stroke', 'white').attr('stroke-width', 2);
+                g.append('text').attr('x', rightX + 30).attr('y', (i + 1) * nodeSpacing)
+                    .attr('text-anchor', 'start').attr('dominant-baseline', 'middle').style('font-size', '12px').text(token);
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', testConnection);
+    </script>
+</body>
+</html>

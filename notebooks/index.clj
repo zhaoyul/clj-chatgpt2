@@ -49,6 +49,32 @@
        [:span.bg-white.bg-opacity-20.px-3.py-1.rounded-full.text-sm "权重可视化"]
        [:span.bg-white.bg-opacity-20.px-3.py-1.rounded-full.text-sm "GELU"]
        [:span.bg-white.bg-opacity-20.px-3.py-1.rounded-full.text-sm "数据流"]]]
+     [:div.text-4xl "→"]]]
+   
+   ;; Notebook 4 - 新增
+   [:a.block.bg-gradient-to-r.from-red-500.to-red-600.text-white.p-6.rounded-lg.shadow-lg.hover:shadow-xl.transition-shadow
+    {:href "./real_weights"}
+    [:div.flex.items-start.justify-between
+     [:div
+      [:h2.font-bold.text-2xl.mb-2 "🎯 真实权重可视化"]
+      [:p.text-red-100 "从 ONNX 模型提取的真实 GPT-2 权重参数：LayerNorm、Attention Bias、MLP 参数"]
+      [:div.mt-4.flex.gap-2
+       [:span.bg-white.bg-opacity-20.px-3.py-1.rounded-full.text-sm "真实数据"]
+       [:span.bg-white.bg-opacity-20.px-3.py-1.rounded-full.text-sm "参数分布"]
+       [:span.bg-white.bg-opacity-20.px-3.py-1.rounded-full.text-sm "统计分析"]]]
+     [:div.text-4xl "→"]]]
+   
+   ;; Notebook 5 - 问答功能
+   [:a.block.bg-gradient-to-r.from-orange-500.to-orange-600.text-white.p-6.rounded-lg.shadow-lg.hover:shadow-xl.transition-shadow
+    {:href "./qa_demo"}
+    [:div.flex.items-start.justify-between
+     [:div
+      [:h2.font-bold.text-2xl.mb-2 "🤖 问答功能演示"]
+      [:p.text-orange-100 "GPT-2 问答功能展示：Prompt Engineering、解码策略对比、温度参数影响"]
+      [:div.mt-4.flex.gap-2
+       [:span.bg-white.bg-opacity-20.px-3.py-1.rounded-full.text-sm "Q&A"]
+       [:span.bg-white.bg-opacity-20.px-3.py-1.rounded-full.text-sm "Prompt工程"]
+       [:span.bg-white.bg-opacity-20.px-3.py-1.rounded-full.text-sm "交互演示"]]]
      [:div.text-4xl "→"]]]])
 
 ;; ## 🚀 快速开始

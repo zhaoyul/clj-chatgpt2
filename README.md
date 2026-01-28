@@ -9,6 +9,7 @@
 ## 目录
 
 - [快速开始](#快速开始)
+- [模型管理](#模型管理)
 - [Clerk 可视化分析](#clerk-可视化分析)
 - [1. 项目概述](#1-项目概述)
 - [2. 技术架构](#2-技术架构)
@@ -22,11 +23,50 @@
 
 ## 快速开始
 
-### 1. 克隆项目并下载模型
+### 1. 克隆项目
 
 ```bash
-# 模型文件已包含在项目中
-ls resources/onnx/model.onnx  # 623 MB ONNX 模型
+git clone <repository-url>
+cd clj-chatgpt2
+```
+
+**注意**: 模型文件 (~623MB) 不包含在 Git 仓库中，需要单独下载。
+
+### 2. 下载模型
+
+#### 方式一: 使用 Make (推荐)
+
+```bash
+# 安装 Python 依赖并下载模型
+make install
+```
+
+#### 方式二: 使用 Python 脚本
+
+```bash
+# 安装依赖
+pip install transformers torch onnx
+
+# 下载并导出 ONNX 模型
+python scripts/setup_model.py --model gpt2
+```
+
+#### 方式三: 手动下载
+
+如果你有现成的 GPT-2 ONNX 模型，直接复制到:
+```
+resources/onnx/model.onnx
+```
+
+**支持的模型:**
+- `gpt2` (124M) - 默认，速度快
+- `gpt2-medium` (345M) - 更好的质量
+- `gpt2-large` (774M) - 更大，需要更多内存
+- `gpt2-xl` (1.5B) - 最大，需要 GPU
+
+**验证模型:**
+```bash
+ls -lh resources/onnx/model.onnx  # 应该显示 ~623 MB
 ```
 
 ### 2. 运行测试
@@ -69,6 +109,67 @@ curl -X POST http://localhost:3000/api/generate \
 
 ---
 
+## 模型管理
+
+### 模型文件 (.gitignore)
+
+模型文件默认被排除在版本控制外：
+
+```gitignore
+resources/onnx/*.onnx      # ONNX 模型 (~623MB)
+resources/onnx/*.bin       # 二进制权重
+resources/onnx/*.safetensors
+resources/weights/         # 提取的权重
+```
+
+### Makefile 命令
+
+```bash
+# 查看所有可用命令
+make help
+
+# 下载默认模型 (gpt2, 124M)
+make model
+
+# 下载更大的模型
+make model-medium   # 345M
+make model-large    # 774M
+
+# 仅下载分词器
+make tokenizer
+
+# 清理缓存
+make clean
+
+# 删除模型文件
+make clean-model
+```
+
+### 手动导出模型
+
+如果你需要自定义导出参数：
+
+```python
+from transformers import GPT2LMHeadModel, GPT2Tokenizer
+import torch
+
+model = GPT2LMHeadModel.from_pretrained("gpt2")
+tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+
+# 导出 ONNX
+torch.onnx.export(
+    model,
+    (dummy_input, dummy_mask),
+    "resources/onnx/model.onnx",
+    input_names=["input_ids", "attention_mask"],
+    output_names=["logits"],
+    dynamic_axes={...},
+    opset_version=14
+)
+```
+
+---
+
 ## Clerk 可视化分析
 
 项目包含基于 **Clerk** 的交互式 Notebook，用于可视化展示 GPT-2 模型的内部结构：
@@ -98,6 +199,68 @@ clojure -M -e "
 | **🏗️ 模型架构** | 整体架构、参数分布、ONNX 结构 | http://localhost:7788/notebooks/model_architecture |
 | **🎯 注意力机制** | 自注意力、多头注意力、因果掩码 | http://localhost:7788/notebooks/attention_mechanism |
 | **🔬 神经网络层** | 权重矩阵、激活函数、信息流动 | http://localhost:7788/notebooks/layer_visualization |
+| **🎯 真实权重** | 从 ONNX 提取的真实 GPT-2 权重 | http://localhost:7788/notebooks/real_weights |
+| **🤖 问答演示** | GPT-2 问答功能展示 | http://localhost:7788/notebooks/qa_demo |
+
+### 2. Netron 模型可视化 (推荐)
+
+**Netron** 是一个专业的神经网络模型可视化工具，支持交互式查看 ONNX 模型结构。
+
+```bash
+# 启动 Netron 可视化服务器
+./scripts/netron.sh        # 默认端口 8080
+./scripts/netron.sh 9000   # 自定义端口
+```
+
+然后打开 http://localhost:8080 查看：
+- **交互式网络图** - 可缩放、拖拽查看模型结构
+- **层属性查看** - 点击任意层查看输入输出形状、参数数量
+- **数据流追踪** - 理解数据在模型中的流动
+
+或者使用在线版本：https://netron.app/ (直接拖拽 model.onnx 文件)
+
+### 3. 注意力可视化服务器
+
+#### 方案 A：纯静态页面（模拟数据）
+
+```bash
+# 启动可视化服务器（默认端口 8888）
+clojure -M -m gpt2.viz-server
+# 访问 http://localhost:8888
+```
+
+页面使用模拟的注意力数据展示效果。
+
+#### 方案 B：动态页面（真实 GPT-2 注意力权重）
+
+需要同时运行 Python API 服务和 Clojure 静态服务器：
+
+**方式 1：分别启动**
+
+```bash
+# 终端 1：启动 Python API（提供真实注意力权重）
+python3 scripts/attention_api.py --port 5000
+
+# 终端 2：启动静态页面服务器
+clojure -M -m gpt2.viz-server 8888
+```
+
+**方式 2：一键启动（推荐）**
+
+```bash
+# 安装 Python 依赖
+pip install flask flask-cors transformers torch
+
+# 启动完整环境
+./scripts/start-viz-full.sh
+```
+
+**功能：**
+- **真实注意力权重** - 从 GPT-2 模型提取
+- **注意力热力图** - 矩阵形式展示
+- **注意力连接图** - 网络图形式展示
+- **交互式控制** - 选择层（1-12）和注意力头（1-12）
+- **实时计算** - 输入任意文本查看其注意力模式
 
 ### 可视化示例
 
@@ -174,7 +337,11 @@ clj-chatgpt2/
 ├── scripts/
 │   ├── export_model.py         # Python 模型导出脚本
 │   ├── run.sh                  # 服务启动脚本
-│   └── clerk.sh                # Clerk notebook 启动脚本
+│   ├── clerk.sh                # Clerk notebook 启动脚本
+│   ├── netron.sh               # Netron 模型可视化
+│   ├── viz.sh                  # 注意力可视化服务器
+│   ├── attention_api.py        # Python API（真实注意力权重）
+│   └── start-viz-full.sh       # 启动完整可视化环境
 ├── notebooks/
 │   ├── index.clj               # Notebook 首页
 │   ├── model_architecture.clj  # 模型架构分析
@@ -184,16 +351,20 @@ clj-chatgpt2/
 │   ├── token.clj               # JTokkit 分词器封装
 │   ├── model.clj               # DJL 模型加载与推理
 │   ├── generate.clj            # 贪婪/Top-K 解码算法
-│   └── server.clj              # Ring/Reitit Web API
+│   ├── server.clj              # Ring/Reitit Web API
+│   └── viz_server.clj          # 可视化服务器
 ├── test/gpt2/
 │   ├── token_test.clj          # 分词器测试
 │   └── generate_test.clj       # 生成算法测试
-└── resources/onnx/
-    ├── model.onnx              # GPT-2 ONNX 模型 (623 MB)
-    ├── vocab.json              # 词表
-    ├── merges.txt              # BPE 合并规则
-    ├── tokenizer_config.json   # 分词器配置
-    └── special_tokens_map.json # 特殊标记映射
+├── resources/onnx/
+│   ├── model.onnx              # GPT-2 ONNX 模型 (623 MB)
+│   ├── vocab.json              # 词表
+│   ├── merges.txt              # BPE 合并规则
+│   ├── tokenizer_config.json   # 分词器配置
+│   └── special_tokens_map.json # 特殊标记映射
+└── resources/public/
+    ├── attention-viz.html      # 静态注意力可视化页面
+    └── attention-viz-dynamic.html # 动态注意力可视化页面（需 API）
 ```
 
 ---
@@ -411,13 +582,48 @@ Ran 7 tests containing 26 assertions.
 
 ---
 
-## 8. 总结
+## 8. 可视化工具对比
+
+| 工具 | 类型 | 启动命令 | 数据 | 特点 |
+|------|------|---------|------|------|
+| **Clerk** | Notebook | `./scripts/clerk.sh` | 静态/真实 | 交互式文档、代码与图表混排 |
+| **Netron** | 模型查看器 | `./scripts/netron.sh` | 模型文件 | 专业 ONNX 可视化 |
+| **Viz Static** | Web | `./scripts/viz.sh` | 模拟 | 注意力可视化（演示效果） |
+| **Viz Dynamic** | Web | `./scripts/start-viz-full.sh` | 真实 GPT-2 | 真实注意力权重 |
+
+### Clerk Notebook 说明
+
+| Notebook | 内容 | 数据来源 |
+|----------|------|----------|
+| `index` | 项目导航和概览 | 静态 |
+| `model_architecture` | 架构分析、参数统计 | 静态 |
+| `attention_mechanism` | 注意力原理讲解 | 静态 |
+| `layer_visualization` | 层次结构可视化 | 静态 |
+| **`real_weights`** | **真实权重可视化** | **ONNX 模型提取** |
+
+### 推荐使用流程
+
+```bash
+# 1. 查看模型结构
+./scripts/netron.sh
+
+# 2. 学习架构原理
+./scripts/clerk.sh
+
+# 3. 探索注意力模式
+./scripts/viz.sh
+```
+
+---
+
+## 9. 总结
 
 本方案采用 **DJL + ONNX Runtime + JTokkit** 技术栈，在 JVM 上实现 GPT-2 推理引擎：
 
 1. **模型层**：ONNX Runtime 提供接近原生 C++ 的高性能推理
 2. **逻辑层**：Clojure 函数式编程简化解码算法实现
 3. **服务层**：Ring + Reitit 构建高并发 Web 服务
+4. **可视化层**：多种工具支持模型理解和调试
 
 该方案适用于需要将 AI 能力集成到现有 JVM 基础设施，或对系统稳定性有极高要求的生产环境。
 

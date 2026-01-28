@@ -11,10 +11,19 @@
 *.swo
 
 # 模型文件（大文件，不应提交到 Git）
+# 只保留目录结构，不包含实际模型文件
 resources/onnx/*.onnx
 resources/onnx/*.bin
-resources/onnx/*.json
-resources/onnx/*.txt
+resources/onnx/*.pt
+resources/onnx/*.pth
+resources/onnx/*.ckpt
+resources/onnx/*.safetensors
+resources/weights/
+
+# 注意：分词器配置文件（vocab.json, merges.txt 等）约 1.4MB
+# 如果需要也完全排除，取消下面两行的注释：
+# resources/onnx/vocab.json
+# resources/onnx/merges.txt
 
 # Python
 __pycache__/

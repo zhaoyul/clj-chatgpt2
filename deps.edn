@@ -13,4 +13,8 @@
         ;; Clerk notebook
         io.github.nextjournal/clerk {:mvn/version "0.18.1158"}}
  :aliases {:dev {:extra-paths ["test"]}
-           :run {:main-opts ["-m" "gpt2.server"]}}}
+           :run {:main-opts ["-m" "gpt2.server"]}
+           :clerk {:exec-fn nextjournal.clerk/serve!
+                   :exec-args {:watch-paths ["notebooks"]
+                               :browse? true
+                               :port 7788}}}}
